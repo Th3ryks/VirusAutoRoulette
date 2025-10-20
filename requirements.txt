@@ -1,0 +1,6 @@
+aiohttp
+aiogram
+kurigram
+TgCrypto
+python-dotenv
+loguru
