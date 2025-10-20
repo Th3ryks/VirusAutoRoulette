@@ -1,4 +1,4 @@
-# 🎰 Telegram Roulette Bot
+# 🎰 Virus Roulette Bot
 
 ## 📋 Overview
 
