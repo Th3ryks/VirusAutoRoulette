@@ -14,7 +14,7 @@ import sys
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder 
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -50,6 +50,24 @@ ACCOUNT_CONFIGS = {
         "api_hash": os.getenv("ACCOUNT1_API_HASH"),
         "phone_number": os.getenv("ACCOUNT1_PHONE_NUMBER"),
         "session_name": "account1"
+    },
+    "account2": {
+        "api_id": os.getenv("ACCOUNT2_API_ID"),
+        "api_hash": os.getenv("ACCOUNT2_API_HASH"),
+        "phone_number": os.getenv("ACCOUNT2_PHONE_NUMBER"),
+        "session_name": "account2"
+    },
+    "account3": {
+        "api_id": os.getenv("ACCOUNT3_API_ID"),
+        "api_hash": os.getenv("ACCOUNT3_API_HASH"),
+        "phone_number": os.getenv("ACCOUNT3_PHONE_NUMBER"),
+        "session_name": "account3"
+    },
+    "account4": {
+        "api_id": os.getenv("ACCOUNT4_API_ID"),
+        "api_hash": os.getenv("ACCOUNT4_API_HASH"),
+        "phone_number": os.getenv("ACCOUNT4_PHONE_NUMBER"),
+        "session_name": "account4"
     }
 }
 
@@ -99,6 +117,9 @@ class AccountManager:
             return None
             
         client = self.accounts[account_name].client
+        if not getattr(client, "is_connected", False):
+            logger.error(f"[{account_name}] Client has not been started yet")
+            return None
         
         try:
             bot_entity = await client.get_users('virus_play_bot')
@@ -1767,13 +1788,11 @@ async def main():
     await setup_bot_handlers()
     
 
-    init_tasks = []
+    """ --- SEQUENTIAL SESSION CREATION --- """
     token_tasks = []
     
     for account_name, config in ACCOUNT_CONFIGS.items():
-        init_tasks.append(initialize_account_client(account_name, config, account_manager))
-    
-    await asyncio.gather(*init_tasks)
+        await initialize_account_client(account_name, config, account_manager)
     
     for account_name, config in ACCOUNT_CONFIGS.items():
         if account_name in account_manager.accounts:
@@ -1820,14 +1839,44 @@ async def main():
     await dp.start_polling(bot_instance)
 
 async def initialize_account_client(account_name, config, account_manager):
-    """Initialize account client only"""
-    success = await account_manager.initialize_account(account_name, config)
-    if success:
+    """ --- INITIALIZE ACCOUNT CLIENT WITH CREDENTIAL VALIDATION --- """
+    try:
+        api_id = config.get("api_id")
+        api_hash = config.get("api_hash")
+        session_name = config.get("session_name")
+
+        if not session_name:
+            logger.error(f"[{account_name}] Missing session_name in configuration")
+            return False
+
+        session_file = f"{session_name}.session"
+
+        if not api_id or not api_hash:
+            logger.error(
+                f"[{account_name}] API credentials missing. Set {account_name.upper()}_API_ID and {account_name.upper()}_API_HASH in .env"
+            )
+            return False
+
+        success = await account_manager.initialize_account(account_name, config)
+        if not success:
+            logger.error(f"[{account_name}] Failed to initialize account")
+            return False
+
         try:
             await account_manager.accounts[account_name].client.start()
+            logger.success(f"[{account_name}] Client started; session ready: {session_file}")
+            return True
         except Exception as e:
             logger.error(f"[{account_name}] Failed to start client: {e}")
-    return success
+            # Remove unstarted account to skip downstream steps
+            try:
+                del account_manager.accounts[account_name]
+            except Exception:
+                pass
+            return False
+    except Exception as e:
+        logger.error(f"[{account_name}] Unexpected error during initialization: {e}")
+        return False
 
 async def get_account_token_and_username(account_name, config, account_manager):
     """Get bearer token and username for an account"""
@@ -1835,6 +1884,11 @@ async def get_account_token_and_username(account_name, config, account_manager):
         return False
         
     try:
+        client = account_manager.accounts[account_name].client
+        if not getattr(client, "is_connected", False):
+            logger.error(f"[{account_name}] Client has not been started yet")
+            return False
+
         init_data = await account_manager.get_init_data(account_name)
         if init_data:
             bearer_token = await get_bearer_token(init_data, account_name)
@@ -1855,4 +1909,31 @@ async def get_account_token_and_username(account_name, config, account_manager):
     return False
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.warning("Shutdown requested by Ctrl+C")
+        try:
+            async def shutdown():
+                """ --- GRACEFUL SHUTDOWN --- """
+                try:
+                    # Stop all Pyrogram clients
+                    for account_name, account_data in account_manager.accounts.items():
+                        try:
+                            if account_data.client:
+                                await account_data.client.stop()
+                                logger.info(f"[{account_name}] Client stopped")
+                        except Exception:
+                            pass
+                    
+                    # Close Aiogram bot session
+                    if bot_instance:
+                        try:
+                            await bot_instance.session.close()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            asyncio.run(shutdown())
+        except Exception:
+            pass
