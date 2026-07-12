@@ -1,215 +1,143 @@
-# 🎰 Virus Roulette Bot
+# Virus Roulette Bot
 
-## 📋 Overview
+Automates [VirusGift](https://virusgift.pro) roulette & free case for multiple Telegram accounts. Includes a live web dashboard and admin notifications via Telegram bot.
 
-This bot automates interactions with Telegram virus roulette bot, managing multiple accounts simultaneously. It provides automated prize claiming, channel subscription management, and balance monitoring with notifications.
+## Features
 
-## ✨ Features
+- **Multi-account** — accounts are loaded automatically from `.env` (`ACCOUNT1_*`, `ACCOUNT2_*`, …)
+- **Free roulette spin** — waits for `nextFreeSpin`, handles subscription + partner click requirements
+- **Daily free case** — opens FREE case when `nextCaseFreeSpin` is ready
+- **Auto-claim Virus / Stars** — claims currency prizes to balance (inventory sweep on startup too)
+- **Channel join / leave** — subscribes when required, unsubscribes after success
+- **Partner clicks** — official mutations: `markTestSpinTaskClick` / Portal / Tonnel / Tonplay + mini-app open
+- **Web dashboard** — live countdowns for roulette & case, Stars/Virus balances
+- **Telegram admin bot** — `/start` status + prize notifications
 
-### 🎯 Core Functionality
-- **Multi-Account Management**: Support for unlimited Telegram accounts
-- **Prize Auto-Claiming**: Automatically claims all types of prizes
-- **Channel Management**: Auto-subscribe to required channels and unsubscribe after claiming
-- **Balance Monitoring**: Real-time balance tracking with goal notifications
-- **Smart Notifications**: Telegram notifications for important events
+## Requirements
 
-### 🔔 Notification System
-- Prize claiming status updates
-- Account status monitoring
-- Error and success notifications
+- Python 3.11+
+- Telegram API credentials ([my.telegram.org](https://my.telegram.org))
+- Bot token from [@BotFather](https://t.me/BotFather)
 
-### 🛡️ Safety Features
-- Automatic retry mechanisms
-- Error handling and logging
-- Rate limiting and delays
-- Session management
+## Setup
 
-## 🚀 Installation
+```bash
+git clone https://github.com/th3ryks/VirusAutoRoulette.git
+cd VirusAutoRoulette
 
-### Prerequisites
-- Python 3.11.0 or higher
-- Telegram API credentials
-- Bot token from @BotFather
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/th3ryks/VirusAutoRoulette.git
-   cd VirusAutoRoulette
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` file with your credentials:
-   ```env
-   BOT_TOKEN=your_bot_token_here
-   ADMIN_ID=your_admin_id_here
-   
-   ACCOUNT1_API_ID=your_api_id_1
-   ACCOUNT1_API_HASH=your_api_hash_1
-   ACCOUNT1_PHONE_NUMBER=your_phone_number_1
-   
-   ACCOUNT2_API_ID=your_api_id_2
-   ACCOUNT2_API_HASH=your_api_hash_2
-   ACCOUNT2_PHONE_NUMBER=your_phone_number_2
-   ```
-
-4. **Run the bot**
-   ```bash
-   python3 main.py
-   ```
-
-## ⚙️ Configuration
-
-### 📱 Adding Accounts
-
-The bot supports unlimited accounts. To add more accounts:
-
-1. **Add new environment variables** to your `.env` file:
-   ```env
-   ACCOUNT3_API_ID=your_api_id_3
-   ACCOUNT3_API_HASH=your_api_hash_3
-   ACCOUNT3_PHONE_NUMBER=your_phone_number_3
-   ```
-
-2. **Add corresponding configuration** in `main.py` (lines 48-53):
-   ```python
-   "account3": {
-       "api_id": os.getenv("ACCOUNT3_API_ID"),
-       "api_hash": os.getenv("ACCOUNT3_API_HASH"),
-       "phone_number": os.getenv("ACCOUNT3_PHONE_NUMBER"),
-       "session_name": "account3"
-   },
-   ```
-
-The bot will automatically:
-- Create `account3.session` file
-- Include the account in monitoring
-- Start automated processes
-
-## 🎮 Usage
-
-### 📊 Telegram Commands
-
-- `/start` - Initialize bot and show main menu
-
-### 🔄 Automated Operations
-
-The bot automatically:
-1. **Monitors account balances**
-2. **Spins roulettes**
-3. **Claims prizes**
-4. **Unsubscribes from channels that had to be subscribed to in order to spin the roulette.**
-5. **Sends a message if the roulette has been spun successfully.**
-
-### 📈 Balance Notifications
-
-- **Balance Updates**: Regular balance monitoring
-- **Prize Notifications**: Alerts for claimed prizes
-
-## 🏗️ Architecture
-
-### 📁 Project Structure
-```
-├── main.py              # Main application file
-├── requirements.txt     # Python dependencies
-├── .env                 # Environment variables
-├── .env.example         # Environment template
-├── .gitignore           # Git ignore rules
-├── LICENSE              # License file
-└── README.md            # This file
-
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-### 🔧 Core Components
+Edit `.env`:
 
-- **AccountManager**: Handles multiple Telegram accounts
-- **AccountData**: Stores account information and settings
-- **Notification System**: Manages Telegram notifications
-- **Roulette Handler**: Automates game participation
-- **Balance Monitor**: Tracks account balances
+```env
+BOT_TOKEN=your_bot_token_here
+ADMIN_ID=your_admin_id_here
 
-## 🛠️ Development
+ACCOUNT1_API_ID=your_api_id_1
+ACCOUNT1_API_HASH=your_api_hash_1
+ACCOUNT1_PHONE_NUMBER=+1234567890
 
-### 📋 Requirements
+# Optional second account
+ACCOUNT2_API_ID=...
+ACCOUNT2_API_HASH=...
+ACCOUNT2_PHONE_NUMBER=...
 
-- **Python**: 3.11.0+
-- **asyncio**: Asynchronous programming
-- **aiogram**: Telegram Bot API
-- **kurigram**: Telegram MTproto API
-- **loguru**: Logging system
+# Optional dashboard (defaults shown)
+DASHBOARD_HOST=127.0.0.1
+DASHBOARD_PORT=8765
+```
 
-### 🧪 Code Quality
+Run:
 
-The project uses:
-- **Ruff**: Code linting and formatting
-- **PEP8**: Python style guide
-- **Type hints**: For better code documentation
-- **Async/await**: Full asynchronous implementation
+```bash
+python main.py
+```
 
-### 🔍 Logging
+On first login you may need to enter the Telegram confirmation code (and 2FA if enabled). Session files (`account1.session`, …) are created automatically.
 
-Comprehensive logging with:
-- **Colored output**: Easy-to-read console logs
-- **Structured format**: Timestamp, level, and message
-- **Multiple levels**: DEBUG, INFO, SUCCESS, WARNING, ERROR
+## Dashboard
 
-## 🚨 Important Notes
+After the bot starts, open:
 
-### ⚠️ Security
-- Never share your `.env` file
-- Keep API credentials secure
-- Use strong passwords for accounts
-- Monitor bot activity regularly
+**http://127.0.0.1:8765**
 
-### 📱 Telegram Limits
-- Respect Telegram's rate limits
-- Avoid excessive API calls
-- Monitor account restrictions
-- Use delays between operations
+Per account you get:
 
-### 🔄 Session Management
-- Session files are created automatically
-- Keep session files secure
-- Don't delete active session files
-- Backup important sessions
+| Field | Description |
+|--------|-------------|
+| Stars / Virus | Current balances |
+| Roulette timer | Countdown until free spin (`READY` when available) |
+| Case timer | Countdown until daily free case |
+| Online | Account client + token status |
 
-## 🆘 Troubleshooting
+API: `GET /api/accounts` — JSON used by the UI (polls every 2s; UI ticks every 250ms).
 
-### Common Issues
+## Telegram bot
 
-1. **Authentication Errors**
-   - Verify API credentials
-   - Check phone number format
-   - Ensure 2FA is properly configured
+- `/start` — status for all accounts (admin only, `ADMIN_ID`)
+- Notifications on successful spin / free case / claims
 
-2. **Connection Issues**
-   - Check internet connection
-   - Verify Telegram API status
-   - Review firewall settings
+## How it works
 
-3. **Session Problems**
-   - Delete corrupted session files
-   - Re-authenticate accounts
-   - Check file permissions
+1. Authenticates each user account via Pyrogram/Kurigram session
+2. Opens VirusGift mini-app (`virus_play_bot`) and gets a bearer token
+3. Worker loop (~10s):
+   - if free **roulette** is ready → spin (handle clicks/subs) → claim Virus/Stars → unsubscribe
+   - else if free **case** is ready → open case → claim → unsubscribe
+4. On startup: sweeps inventory for unclaimed Virus/Stars prizes
 
-### 📞 Support
+### Accounts in `.env`
 
-For issues and questions:
-- Check logs for error messages
-- Verify configuration settings
-- Review Telegram API documentation
-- Ensure all dependencies are installed
+No need to edit `main.py`. Any complete set is loaded:
+
+```text
+ACCOUNT{N}_API_ID
+ACCOUNT{N}_API_HASH
+ACCOUNT{N}_PHONE_NUMBER
+```
+
+Example: `ACCOUNT3_*` → session `account3.session`.
+
+## Project structure
+
+```text
+├── main.py              # Bot, workers, GraphQL, dashboard server
+├── dashboard/
+│   └── index.html       # Live web UI
+├── requirements.txt
+├── .env.example
+├── accountN.session     # Created at runtime (gitignored)
+└── README.md
+```
+
+## Dependencies
+
+- `aiohttp` — GraphQL client + dashboard HTTP server
+- `aiogram` — admin Telegram bot
+- `kurigram` — user MTProto clients
+- `TgCrypto`, `python-dotenv`, `loguru`
+
+## Security
+
+- Never commit `.env` or `*.session`
+- Keep API hashes and bot tokens private
+- Dashboard binds to `127.0.0.1` by default (local only)
+
+## Troubleshooting
+
+| Issue | What to check |
+|--------|----------------|
+| Login / 2FA | Phone format with `+`, correct API ID/hash |
+| `TEST_SPIN_*_CLICK_REQUIRED` | Should auto-mark + open mini-app; check logs |
+| `INSUFFICIENT_BALANCE` | Free spin already used; wait for next timer |
+| Claim failed | Logs show GraphQL code; inventory is retried on next startup/spin |
+| Dashboard offline | Bot must be running; open `http://HOST:PORT` from `.env` |
 
 ---
 
-**⚡ Happy Roulette Spins!**
+Happy spins.
