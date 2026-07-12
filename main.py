@@ -15,6 +15,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder 
+from aiohttp import web
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -35,6 +37,9 @@ load_dotenv()
 graphql_url = "https://virusgift.pro/api/graphql/query"
 bot_token = os.getenv("BOT_TOKEN")
 admin_id = int(os.getenv("ADMIN_ID"))
+DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "127.0.0.1")
+DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8765"))
+DASHBOARD_DIR = Path(__file__).resolve().parent / "dashboard"
 
 
 def load_account_configs() -> Dict[str, dict]:
@@ -78,6 +83,7 @@ class AccountData:
     subscribed_channels: set
     interacted_bots: set
     next_case_free_spin: str = "Unknown"
+    virus_balance: int = 0
 
 class AccountManager:
     def __init__(self):
@@ -102,6 +108,7 @@ class AccountManager:
                 subscribed_channels=set(),
                 interacted_bots=set(),
                 next_case_free_spin="Unknown",
+                virus_balance=0,
             )
             
             self.accounts[account_name] = account_data
@@ -188,6 +195,13 @@ async def get_me_free_timers(bearer_token) -> dict:
     return {'next_free_spin': None, 'next_case_free_spin': None}
 
 
+def apply_balance_to_account(account_data: AccountData, balance_data) -> None:
+    if not isinstance(balance_data, dict):
+        return
+    account_data.balance = balance_data.get('stars_balance', 0) or 0
+    account_data.virus_balance = balance_data.get('virus_balance', 0) or 0
+
+
 def is_free_reward_ready(next_time: Optional[str]) -> bool:
     """True when timer is missing/unknown/past — reward can be claimed."""
     if not next_time or next_time in ("Unknown", "⏳ Unknown..."):
@@ -197,6 +211,54 @@ def is_free_reward_ready(next_time: Optional[str]) -> bool:
         return datetime.now(timezone.utc) >= dt
     except (ValueError, TypeError):
         return True
+
+
+def build_dashboard_payload() -> dict:
+    accounts = []
+    for name, acc in account_manager.accounts.items():
+        client = acc.client
+        online = bool(
+            acc.bearer_token
+            and client
+            and getattr(client, "is_connected", False)
+        )
+        accounts.append({
+            "id": name,
+            "username": acc.username or "",
+            "stars_balance": acc.balance or 0,
+            "virus_balance": getattr(acc, "virus_balance", 0) or 0,
+            "next_roulette_time": acc.next_roulette_time,
+            "next_case_free_spin": getattr(acc, "next_case_free_spin", None),
+            "roulette_ready": is_free_reward_ready(acc.next_roulette_time),
+            "case_ready": is_free_reward_ready(getattr(acc, "next_case_free_spin", None)),
+            "online": online,
+        })
+    return {
+        "server_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "accounts": accounts,
+    }
+
+
+async def dashboard_api_accounts(_request):
+    return web.json_response(build_dashboard_payload())
+
+
+async def dashboard_index(_request):
+    index_path = DASHBOARD_DIR / "index.html"
+    if not index_path.exists():
+        return web.Response(text="Dashboard not found", status=404)
+    return web.FileResponse(index_path)
+
+
+async def start_dashboard_server():
+    app = web.Application()
+    app.router.add_get("/", dashboard_index)
+    app.router.add_get("/api/accounts", dashboard_api_accounts)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, DASHBOARD_HOST, DASHBOARD_PORT)
+    await site.start()
+    logger.success(f"Dashboard available at http://{DASHBOARD_HOST}:{DASHBOARD_PORT}")
 
 def get_username_from_init_data(init_data):
     try:
@@ -1062,7 +1124,7 @@ async def process_account_free_case(account_name: str, account_data: AccountData
         stars_balance = balance_result.get('stars_balance', 'Unknown') if isinstance(balance_result, dict) else 'Unknown'
         virus_balance = balance_result.get('virus_balance', 'Unknown') if isinstance(balance_result, dict) else 'Unknown'
         if isinstance(balance_result, dict):
-            account_data.balance = balance_result.get('stars_balance', 0) or 0
+            apply_balance_to_account(account_data, balance_result)
 
         message = (
             f"> @{account_data.username} opened free case\n"
@@ -1634,7 +1696,7 @@ async def setup_bot_handlers():
 async def update_single_account_status(account_name, account_data):
     try:
         balance_data = await get_account_balance(account_data.bearer_token)
-        account_data.balance = balance_data.get('stars_balance', 0) if isinstance(balance_data, dict) else 0
+        apply_balance_to_account(account_data, balance_data)
 
         timers = await get_me_free_timers(account_data.bearer_token)
         if timers.get('next_free_spin') is not None:
@@ -1652,7 +1714,7 @@ async def update_all_accounts_status():
         if account_data.bearer_token:
             try:
                 balance_data = await get_account_balance(account_data.bearer_token)
-                account_data.balance = balance_data.get('stars_balance', 0) if isinstance(balance_data, dict) else 0
+                apply_balance_to_account(account_data, balance_data)
 
                 timers = await get_me_free_timers(account_data.bearer_token)
                 if timers.get('next_free_spin') is not None:
@@ -1854,7 +1916,7 @@ async def process_account_roulette(account_name: str, account_data: AccountData)
                         await send_notification(success_message)
 
                     if isinstance(balance_result, dict):
-                        account_data.balance = balance_result.get('stars_balance', 0) or 0
+                        apply_balance_to_account(account_data, balance_result)
 
                     await update_all_accounts_status()
                 except Exception as e:
@@ -2033,7 +2095,7 @@ async def main():
             if claimed:
                 balance_data = await get_account_balance(account_data.bearer_token)
                 if isinstance(balance_data, dict):
-                    account_data.balance = balance_data.get('stars_balance', 0) or 0
+                    apply_balance_to_account(account_data, balance_data)
                     logger.success(
                         f"[{account_name}] Inventory collected | Stars: {balance_data.get('stars_balance')} | "
                         f"Virus: {balance_data.get('virus_balance')}"
@@ -2042,7 +2104,9 @@ async def main():
                 logger.info(f"[{account_name}] No claimable Virus/Stars in inventory")
         except Exception as e:
             logger.error(f"[{account_name}] Startup inventory claim failed: {e}")
-    
+
+    await start_dashboard_server()
+
     async def roulette_worker():
         while True:
             try:

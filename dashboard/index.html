@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Virus Roulette Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #1c1f26;
+      --bg-elevated: #242933;
+      --bg-card: #2a303c;
+      --border: #3a4150;
+      --text: #e8eaef;
+      --muted: #9aa3b5;
+      --stars: #f0c14b;
+      --virus: #5ecf9a;
+      --ready: #6bcf7f;
+      --warn: #e0a35c;
+      --danger: #d97a7a;
+      --roulette: #7eb6ff;
+      --case: #c9a0ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Sora", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #2d3442 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #28303a 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      padding: 32px 20px 48px;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: clamp(1.4rem, 3vw, 1.85rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 6px;
+    }
+
+    .meta {
+      text-align: right;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .meta .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ready);
+      margin-right: 6px;
+      box-shadow: 0 0 0 3px rgba(107, 207, 127, 0.15);
+    }
+
+    .meta .dot.off { background: var(--danger); box-shadow: 0 0 0 3px rgba(217, 122, 122, 0.15); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: linear-gradient(160deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 240px;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .identity .name {
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .identity .id {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .status-pill {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(107, 207, 127, 0.12);
+      color: var(--ready);
+      border: 1px solid rgba(107, 207, 127, 0.25);
+      white-space: nowrap;
+    }
+
+    .status-pill.offline {
+      background: rgba(217, 122, 122, 0.12);
+      color: var(--danger);
+      border-color: rgba(217, 122, 122, 0.25);
+    }
+
+    .balances {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .bal {
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .bal .label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .bal .value {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    .bal.stars .value { color: var(--stars); }
+    .bal.virus .value { color: var(--virus); }
+
+    .timers {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: auto;
+    }
+
+    .timer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.16);
+      border: 1px solid var(--border);
+    }
+
+    .timer-row .kind {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .timer-row .kind span:first-child {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .timer-row .kind span:last-child {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .timer-row.roulette .kind span:last-child { color: var(--roulette); }
+    .timer-row.case .kind span:last-child { color: var(--case); }
+
+    .countdown {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 1.05rem;
+      font-weight: 700;
+      min-width: 7.5ch;
+      text-align: right;
+    }
+
+    .countdown.ready {
+      color: var(--ready);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+
+    .countdown.soon { color: var(--warn); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+
+    .empty, .error {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--muted);
+      background: var(--bg-elevated);
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+    }
+
+    .error { color: var(--danger); border-color: rgba(217, 122, 122, 0.35); }
+
+    @media (max-width: 560px) {
+      body { padding: 20px 14px 36px; }
+      header { align-items: flex-start; }
+      .meta { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Virus Roulette</h1>
+        <p>Live account timers & balances</p>
+      </div>
+      <div class="meta">
+        <div><span id="live-dot" class="dot off"></span><span id="live-label">connecting…</span></div>
+        <div id="clock" style="margin-top:6px">—</div>
+      </div>
+    </header>
+    <div id="app" class="grid">
+      <div class="empty">Loading accounts…</div>
+    </div>
+  </div>
+
+  <script>
+    const app = document.getElementById("app");
+    const liveDot = document.getElementById("live-dot");
+    const liveLabel = document.getElementById("live-label");
+    const clockEl = document.getElementById("clock");
+
+    let accounts = [];
+    let serverOffsetMs = 0;
+    let lastOk = false;
+
+    function nowUtc() {
+      return Date.now() + serverOffsetMs;
+    }
+
+    function parseIso(value) {
+      if (!value || value === "Unknown") return null;
+      const ms = Date.parse(String(value));
+      return Number.isNaN(ms) ? null : ms;
+    }
+
+    function formatNumber(n) {
+      if (n === null || n === undefined || n === "") return "—";
+      const num = Number(n);
+      if (Number.isNaN(num)) return String(n);
+      return num.toLocaleString("en-US");
+    }
+
+    function formatCountdown(targetMs) {
+      if (targetMs === null) {
+        return { text: "unknown", cls: "" };
+      }
+      const diff = targetMs - nowUtc();
+      if (diff <= 0) {
+        return { text: "READY", cls: "ready" };
+      }
+      const total = Math.floor(diff / 1000);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      const text = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      const cls = total <= 1800 ? "soon" : "";
+      return { text, cls };
+    }
+
+    function render() {
+      if (!accounts.length) {
+        app.innerHTML = `<div class="empty">${lastOk ? "No accounts loaded" : "Waiting for bot…"}</div>`;
+        return;
+      }
+
+      app.innerHTML = accounts.map((acc) => {
+        const roulette = formatCountdown(parseIso(acc.next_roulette_time));
+        const freeCase = formatCountdown(parseIso(acc.next_case_free_spin));
+        const online = acc.online ? "online" : "offline";
+        const pillClass = acc.online ? "" : "offline";
+        const user = acc.username ? `@${acc.username}` : acc.id;
+
+        return `
+          <article class="card">
+            <div class="card-top">
+              <div class="identity">
+                <div class="name">${user}</div>
+                <div class="id">${acc.id}</div>
+              </div>
+              <div class="status-pill ${pillClass}">${online}</div>
+            </div>
+            <div class="balances">
+              <div class="bal stars">
+                <div class="label">Stars</div>
+                <div class="value">${formatNumber(acc.stars_balance)}</div>
+              </div>
+              <div class="bal virus">
+                <div class="label">Virus</div>
+                <div class="value">${formatNumber(acc.virus_balance)}</div>
+              </div>
+            </div>
+            <div class="timers">
+              <div class="timer-row roulette">
+                <div class="kind">
+                  <span>Roulette</span>
+                  <span>Free spin</span>
+                </div>
+                <div class="countdown ${roulette.cls}">${roulette.text}</div>
+              </div>
+              <div class="timer-row case">
+                <div class="kind">
+                  <span>Case</span>
+                  <span>Daily free</span>
+                </div>
+                <div class="countdown ${freeCase.cls}">${freeCase.text}</div>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function tickClock() {
+      const d = new Date(nowUtc());
+      clockEl.textContent = d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
+      render();
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/accounts", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const serverMs = parseIso(data.server_time);
+        if (serverMs !== null) {
+          serverOffsetMs = serverMs - Date.now();
+        }
+        accounts = data.accounts || [];
+        lastOk = true;
+        liveDot.classList.remove("off");
+        liveLabel.textContent = "live";
+        render();
+      } catch (err) {
+        lastOk = false;
+        liveDot.classList.add("off");
+        liveLabel.textContent = "offline";
+        if (!accounts.length) {
+          app.innerHTML = `<div class="error">Cannot reach API: ${err.message}</div>`;
+        }
+      }
+    }
+
+    fetchStatus();
+    setInterval(fetchStatus, 2000);
+    setInterval(tickClock, 250);
+  </script>
+</body>
+</html>
