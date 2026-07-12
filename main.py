@@ -40,6 +40,8 @@ admin_id = int(os.getenv("ADMIN_ID"))
 DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "127.0.0.1")
 DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8765"))
 DASHBOARD_DIR = Path(__file__).resolve().parent / "dashboard"
+SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
+SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def load_account_configs() -> Dict[str, dict]:
@@ -95,7 +97,8 @@ class AccountManager:
                 config["session_name"],
                 config["api_id"],
                 config["api_hash"],
-                phone_number=config["phone_number"]
+                phone_number=config["phone_number"],
+                workdir=str(SESSIONS_DIR),
             )
             
             account_data = AccountData(
@@ -271,7 +274,14 @@ def get_username_from_init_data(init_data):
     return 'Unknown'
 
 async def get_init_data(account_config):
-    client = Client(account_config["session_name"], api_id=account_config["api_id"], api_hash=account_config["api_hash"], ipv6=False, phone_number=account_config["phone_number"])
+    client = Client(
+        account_config["session_name"],
+        api_id=account_config["api_id"],
+        api_hash=account_config["api_hash"],
+        ipv6=False,
+        phone_number=account_config["phone_number"],
+        workdir=str(SESSIONS_DIR),
+    )
     async with client:
         bot_entity = await client.get_users('virus_play_bot')
         bot = InputUser(user_id=bot_entity.id, access_hash=bot_entity.raw.access_hash)
@@ -2156,7 +2166,7 @@ async def initialize_account_client(account_name, config, account_manager):
             logger.error(f"[{account_name}] Missing session_name in configuration")
             return False
 
-        session_file = f"{session_name}.session"
+        session_file = SESSIONS_DIR / f"{session_name}.session"
 
         if not api_id or not api_hash:
             logger.error(

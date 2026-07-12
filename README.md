@@ -58,7 +58,7 @@ Run:
 python main.py
 ```
 
-On first login you may need to enter the Telegram confirmation code (and 2FA if enabled). Session files (`account1.session`, …) are created automatically.
+On first login you may need to enter the Telegram confirmation code (and 2FA if enabled). Session files are stored in `sessions/accountN.session`.
 
 ## Dashboard
 
@@ -106,12 +106,12 @@ Example: `ACCOUNT3_*` → session `account3.session`.
 ## Project structure
 
 ```text
-├── main.py              # Bot, workers, GraphQL, dashboard server
+├── main.py
 ├── dashboard/
-│   └── index.html       # Live web UI
+│   └── index.html
+├── sessions/            # accountN.session files (gitignored)
 ├── requirements.txt
 ├── .env.example
-├── accountN.session     # Created at runtime (gitignored)
 └── README.md
 ```
 

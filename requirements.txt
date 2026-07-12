@@ -1,5 +1,5 @@
 aiohttp
-aiogram==3.22.0
+aiogram
 kurigram
 TgCrypto
 python-dotenv

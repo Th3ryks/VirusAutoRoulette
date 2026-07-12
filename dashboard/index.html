@@ -35,6 +35,9 @@
         var(--bg);
       color: var(--text);
       padding: 32px 20px 48px;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
 
     .wrap {
@@ -239,6 +242,28 @@
 
     .error { color: var(--danger); border-color: rgba(217, 122, 122, 0.35); }
 
+    footer.credit {
+      margin-top: 36px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    footer.credit a {
+      color: var(--text);
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(232, 234, 239, 0.35);
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    footer.credit a:hover {
+      color: var(--roulette);
+      border-bottom-color: var(--roulette);
+    }
+
     @media (max-width: 560px) {
       body { padding: 20px 14px 36px; }
       header { align-items: flex-start; }
@@ -261,9 +286,17 @@
     <div id="app" class="grid">
       <div class="empty">Loading accounts…</div>
     </div>
+    <footer class="credit">
+      Done by <a href="https://t.me/Th3ryks" target="_blank" rel="noopener noreferrer">Th3ryks</a>
+    </footer>
   </div>
 
   <script>
+    document.addEventListener("copy", (e) => e.preventDefault());
+    document.addEventListener("cut", (e) => e.preventDefault());
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+    document.addEventListener("selectstart", (e) => e.preventDefault());
+    document.addEventListener("dragstart", (e) => e.preventDefault());
     const app = document.getElementById("app");
     const liveDot = document.getElementById("live-dot");
     const liveLabel = document.getElementById("live-label");
