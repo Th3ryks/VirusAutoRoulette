@@ -1,6 +1,6 @@
 # Virus Roulette Bot
 
-Automates [VirusGift](https://virusgift.pro) roulette & free case for multiple Telegram accounts. Includes a live web dashboard and admin notifications via Telegram bot.
+Automates [VirusGift](https://t.me/virus_play_bot/app?startapp=inviteCodeZdVBEYw3nTUNMq3n) roulette & free case for multiple Telegram accounts. Includes a live web dashboard and admin notifications via Telegram bot.
 
 ## Features
 
