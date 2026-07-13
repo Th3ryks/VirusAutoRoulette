@@ -686,6 +686,57 @@ async def visit_story_link(link):
     except Exception:
         return False
 
+
+async def check_story_post_roulette_prize_win(bearer_token: str, user_prize_id) -> bool:
+    """Claim story bonus after a spin. Frontend only opens share UI then calls this —
+    actual story publish is not verified by the backend.
+    """
+    if user_prize_id is None:
+        return False
+    try:
+        uid = int(user_prize_id)
+    except (TypeError, ValueError):
+        uid = user_prize_id
+
+    headers = {
+        "accept": "*/*",
+        "authorization": bearer_token,
+        "content-type": "application/json",
+        "origin": "https://virusgift.pro",
+        "referer": "https://virusgift.pro/roulette",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    }
+    json_data = {
+        "operationName": "checkStoryPostRoulettePrizeWin",
+        "variables": {"input": {"userPrizeId": uid}},
+        "query": (
+            "mutation checkStoryPostRoulettePrizeWin($input: CheckStoryPostRoulettePrizeWinInput!) { "
+            "checkStoryPostRoulettePrizeWin(input: $input) { success } }"
+        ),
+    }
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(graphql_url, headers=headers, json=json_data) as response:
+                if response.status != 200:
+                    logger.error(f"checkStoryPostRoulettePrizeWin HTTP {response.status}")
+                    return False
+                result = await response.json()
+    except Exception as e:
+        logger.error(f"checkStoryPostRoulettePrizeWin failed: {e}")
+        return False
+
+    if result.get("errors"):
+        for err in result["errors"]:
+            code = (err.get("extensions") or {}).get("code", "UNKNOWN")
+            logger.warning(f"checkStoryPostRoulettePrizeWin [{code}]: {err.get('message')}")
+        return False
+
+    payload = ((result.get("data") or {}).get("checkStoryPostRoulettePrizeWin") or {})
+    return bool(payload.get("success"))
+
+
 def parse_telegram_link(link: str):
     """Parse t.me bot / mini-app deep links."""
     bot_username = None
@@ -2016,6 +2067,33 @@ async def process_account_roulette(account_name: str, account_data: AccountData)
                             f"💰 Stars Balance: {formatted_stars_balance}\n"
                             f"💰 Virus Balance: {formatted_virus_balance}"
                         )
+
+                    # Story bonus: site opens share UI then calls this mutation (~5s later).
+                    # Backend does not require an actual Telegram story post.
+                    if user_prize_id and spin_data.get("isStoryRewardAvailable"):
+                        story_amount = spin_data.get("storyReward") or 0
+                        logger.info(
+                            f"[{account_name}] Story reward available ({story_amount}) — claiming via checkStoryPostRoulettePrizeWin"
+                        )
+                        await asyncio.sleep(2)
+                        story_ok = await check_story_post_roulette_prize_win(
+                            account_data.bearer_token, user_prize_id
+                        )
+                        if not story_ok:
+                            await asyncio.sleep(4)
+                            story_ok = await check_story_post_roulette_prize_win(
+                                account_data.bearer_token, user_prize_id
+                            )
+                        if story_ok:
+                            logger.success(
+                                f"[{account_name}] Story reward claimed (userPrizeId={user_prize_id}, amount={story_amount})"
+                            )
+                            balance_result = await get_account_balance(account_data.bearer_token)
+                            if isinstance(balance_result, dict):
+                                apply_balance_to_account(account_data, balance_result)
+                            await check_and_claim_rewards(account_data.bearer_token, account_data)
+                        else:
+                            logger.warning(f"[{account_name}] Story reward claim failed")
 
                     # Collect any leftover Virus/Stars from inventory
                     await check_and_claim_rewards(account_data.bearer_token, account_data)
