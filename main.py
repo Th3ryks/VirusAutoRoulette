@@ -273,7 +273,7 @@ def _dashboard_cookie_ok(request: web.Request) -> bool:
 async def dashboard_auth_middleware(request: web.Request, handler):
     if not COOKIE_ON:
         return await handler(request)
-    if request.path in ("/login", "/api/login"):
+    if request.path in ("/login", "/api/login", "/site", "/logo.png"):
         return await handler(request)
     if _dashboard_cookie_ok(request):
         return await handler(request)
@@ -320,6 +320,20 @@ async def dashboard_index(request):
     return web.FileResponse(index_path)
 
 
+async def site_index(request):
+    site_path = Path(__file__).resolve().parent / "site" / "index.html"
+    if not site_path.exists():
+        return web.Response(text="Site not found", status=404)
+    return web.FileResponse(site_path)
+
+
+async def dashboard_logo(request):
+    logo_path = Path(__file__).resolve().parent / "logo.png"
+    if not logo_path.exists():
+        return web.Response(text="Logo not found", status=404)
+    return web.FileResponse(logo_path)
+
+
 async def dashboard_login_page(request):
     if COOKIE_ON and _dashboard_cookie_ok(request):
         raise web.HTTPFound("/")
@@ -335,6 +349,8 @@ async def start_dashboard_server():
     middlewares = [dashboard_auth_middleware] if COOKIE_ON else []
     app = web.Application(middlewares=middlewares)
     app.router.add_get("/", dashboard_index)
+    app.router.add_get("/site", site_index)
+    app.router.add_get("/logo.png", dashboard_logo)
     app.router.add_get("/login", dashboard_login_page)
     app.router.add_post("/api/login", dashboard_api_login)
     app.router.add_get("/api/accounts", dashboard_api_accounts)
