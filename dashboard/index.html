@@ -401,7 +401,11 @@
 
     async function fetchStatus() {
       try {
-        const res = await fetch("/api/accounts", { cache: "no-store" });
+        const res = await fetch("/api/accounts", { cache: "no-store", credentials: "same-origin" });
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const serverMs = parseIso(data.server_time);

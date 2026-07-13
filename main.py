@@ -3,6 +3,9 @@ import asyncio
 import aiohttp
 import json
 import re
+import hmac
+import hashlib
+import secrets
 from dotenv import load_dotenv
 from urllib.parse import parse_qs, urlparse
 from datetime import datetime, timezone
@@ -39,6 +42,10 @@ bot_token = os.getenv("BOT_TOKEN")
 admin_id = int(os.getenv("ADMIN_ID"))
 DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "127.0.0.1")
 DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8765"))
+COOKIE_ON = os.getenv("COOKIE_ON", "false").strip().lower() in ("1", "true", "yes", "on")
+DASHBOARD_PASSWORD = os.getenv("PASSWORD", "")
+DASHBOARD_COOKIE_NAME = "vr_dash_auth"
+DASHBOARD_COOKIE_MAX_AGE = 10 * 365 * 24 * 3600  # ~10 years; survives script restarts
 DASHBOARD_DIR = Path(__file__).resolve().parent / "dashboard"
 SESSIONS_DIR = Path(__file__).resolve().parent / "sessions"
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -242,26 +249,101 @@ def build_dashboard_payload() -> dict:
     }
 
 
-async def dashboard_api_accounts(_request):
+def _dashboard_cookie_token() -> str:
+    """Stable token derived from PASSWORD — valid across process restarts until password changes."""
+    return hmac.new(
+        DASHBOARD_PASSWORD.encode("utf-8"),
+        b"virusroulette-dashboard-auth-v1",
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _dashboard_cookie_ok(request: web.Request) -> bool:
+    if not COOKIE_ON:
+        return True
+    if not DASHBOARD_PASSWORD:
+        return False
+    raw = request.cookies.get(DASHBOARD_COOKIE_NAME, "")
+    if not raw:
+        return False
+    return secrets.compare_digest(raw, _dashboard_cookie_token())
+
+
+@web.middleware
+async def dashboard_auth_middleware(request: web.Request, handler):
+    if not COOKIE_ON:
+        return await handler(request)
+    if request.path in ("/login", "/api/login"):
+        return await handler(request)
+    if _dashboard_cookie_ok(request):
+        return await handler(request)
+    if request.path.startswith("/api/"):
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    raise web.HTTPFound("/login")
+
+
+async def dashboard_api_accounts(request):
     return web.json_response(build_dashboard_payload())
 
 
-async def dashboard_index(_request):
+async def dashboard_api_login(request: web.Request):
+    if not COOKIE_ON:
+        return web.json_response({"ok": True, "auth": False})
+    if not DASHBOARD_PASSWORD:
+        return web.json_response({"error": "PASSWORD is not set in .env"}, status=500)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    password = str(body.get("password", ""))
+    if not secrets.compare_digest(password, DASHBOARD_PASSWORD):
+        return web.json_response({"error": "Invalid password"}, status=401)
+
+    resp = web.json_response({"ok": True})
+    forwarded = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+    resp.set_cookie(
+        DASHBOARD_COOKIE_NAME,
+        _dashboard_cookie_token(),
+        max_age=DASHBOARD_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+        secure=(forwarded == "https"),
+        path="/",
+    )
+    return resp
+
+
+async def dashboard_index(request):
     index_path = DASHBOARD_DIR / "index.html"
     if not index_path.exists():
         return web.Response(text="Dashboard not found", status=404)
     return web.FileResponse(index_path)
 
 
+async def dashboard_login_page(request):
+    if COOKIE_ON and _dashboard_cookie_ok(request):
+        raise web.HTTPFound("/")
+    login_path = DASHBOARD_DIR / "login.html"
+    if not login_path.exists():
+        return web.Response(text="Login page not found", status=404)
+    return web.FileResponse(login_path)
+
+
 async def start_dashboard_server():
-    app = web.Application()
+    if COOKIE_ON and not DASHBOARD_PASSWORD:
+        logger.error("COOKIE_ON=true but PASSWORD is empty — dashboard auth will reject everyone")
+    middlewares = [dashboard_auth_middleware] if COOKIE_ON else []
+    app = web.Application(middlewares=middlewares)
     app.router.add_get("/", dashboard_index)
+    app.router.add_get("/login", dashboard_login_page)
+    app.router.add_post("/api/login", dashboard_api_login)
     app.router.add_get("/api/accounts", dashboard_api_accounts)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, DASHBOARD_HOST, DASHBOARD_PORT)
     await site.start()
-    logger.success(f"Dashboard available at http://{DASHBOARD_HOST}:{DASHBOARD_PORT}")
+    auth_note = " (password auth on)" if COOKIE_ON else ""
+    logger.success(f"Dashboard available at http://{DASHBOARD_HOST}:{DASHBOARD_PORT}{auth_note}")
 
 def get_username_from_init_data(init_data):
     try:
