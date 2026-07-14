@@ -419,7 +419,18 @@ async def subscribe_to_channel(target, account_data: AccountData):
                 if "USER_ALREADY_PARTICIPANT" not in str(join_error):
                     raise
                 logger.debug(f"[{account_data.name}] Already subscribed to channel: {channel_ref}")
-                chat = await account_data.client.get_chat(channel_ref)
+                try:
+                    chat = await account_data.client.get_chat(channel_ref)
+                except Exception:
+                    account_data.subscribed_channels.add(channel_ref)
+                    if isinstance(subscribed_channels, dict):
+                        subscribed_channels[channel_ref] = True
+                    else:
+                        if not isinstance(subscribed_channels, set):
+                            subscribed_channels = set()
+                        subscribed_channels.add(channel_ref)
+                    logger.info(f"[{account_data.name}] Already in channel (tracked by invite): {channel_ref}")
+                    return True
 
             track_id = getattr(chat, "id", None) or channel_ref
             account_data.subscribed_channels.add(track_id)
@@ -529,11 +540,16 @@ def normalize_channel_ref(target: str):
         if not path:
             return value
         if path.startswith("+") or path.startswith("joinchat/"):
-            # Private invite — pass full t.me link or +hash
+            # Private invite — Pyrogram ImportChatInvite needs full t.me/+hash URL
             if path.startswith("joinchat/"):
                 return f"https://t.me/{path}"
-            return path if path.startswith("+") else f"+{path}"
+            hash_part = path[1:] if path.startswith("+") else path
+            return f"https://t.me/+{hash_part}"
         return path.split("/")[0]
+
+    # Bare +inviteHash (without domain)
+    if value.startswith("+") and len(value) > 1 and "/" not in value:
+        return f"https://t.me/{value}"
 
     return value
 
