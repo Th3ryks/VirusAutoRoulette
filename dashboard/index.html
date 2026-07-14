@@ -210,6 +210,15 @@
 
     .timer-row.roulette .kind span:last-child { color: var(--roulette); }
     .timer-row.case .kind span:last-child { color: var(--case); }
+    .timer-row.story .kind span:last-child { color: var(--virus); }
+
+    .story-reward {
+      color: var(--virus);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-align: right;
+    }
 
     .countdown {
       font-family: "JetBrains Mono", monospace;
@@ -352,6 +361,7 @@
         const online = acc.online ? "online" : "offline";
         const pillClass = acc.online ? "" : "offline";
         const user = acc.username ? `@${acc.username}` : acc.id;
+        const storyReward = acc.last_story_reward || "Not claimed";
 
         return `
           <article class="card">
@@ -386,6 +396,13 @@
                   <span>Daily free</span>
                 </div>
                 <div class="countdown ${freeCase.cls}">${freeCase.text}</div>
+              </div>
+              <div class="timer-row story">
+                <div class="kind">
+                  <span>Story reward</span>
+                  <span>${acc.last_story_reward ? "Claimed" : "No reward claimed yet"}</span>
+                </div>
+                <div class="story-reward">${storyReward}</div>
               </div>
             </div>
           </article>

@@ -93,6 +93,7 @@ class AccountData:
     interacted_bots: set
     next_case_free_spin: str = "Unknown"
     virus_balance: int = 0
+    last_story_reward: str = ""
 
 class AccountManager:
     def __init__(self):
@@ -119,6 +120,7 @@ class AccountManager:
                 interacted_bots=set(),
                 next_case_free_spin="Unknown",
                 virus_balance=0,
+                last_story_reward="",
             )
             
             self.accounts[account_name] = account_data
@@ -239,6 +241,7 @@ def build_dashboard_payload() -> dict:
             "virus_balance": getattr(acc, "virus_balance", 0) or 0,
             "next_roulette_time": acc.next_roulette_time,
             "next_case_free_spin": getattr(acc, "next_case_free_spin", None),
+            "last_story_reward": getattr(acc, "last_story_reward", ""),
             "roulette_ready": is_free_reward_ready(acc.next_roulette_time),
             "case_ready": is_free_reward_ready(getattr(acc, "next_case_free_spin", None)),
             "online": online,
@@ -2085,6 +2088,8 @@ async def process_account_roulette(account_name: str, account_data: AccountData)
                                 account_data.bearer_token, user_prize_id
                             )
                         if story_ok:
+                            story_reward_text = f"{story_amount} Stars"
+                            account_data.last_story_reward = story_reward_text
                             logger.success(
                                 f"[{account_name}] Story reward claimed (userPrizeId={user_prize_id}, amount={story_amount})"
                             )
@@ -2092,6 +2097,11 @@ async def process_account_roulette(account_name: str, account_data: AccountData)
                             if isinstance(balance_result, dict):
                                 apply_balance_to_account(account_data, balance_result)
                             await check_and_claim_rewards(account_data.bearer_token, account_data)
+                            username = f"@{account_data.username}" if account_data.username else account_name
+                            await send_notification(
+                                f"🎬 Story reward claimed\n\n"
+                                f"User {username} claimed a story reward and received {story_reward_text}."
+                            )
                         else:
                             logger.warning(f"[{account_name}] Story reward claim failed")
 
