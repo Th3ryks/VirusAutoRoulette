@@ -820,15 +820,30 @@ def graphql_auth_headers(bearer_token: str) -> dict:
     }
 
 
+def extract_task_id(extensions: dict):
+    """Read task id from GraphQL error extensions (snake or camel)."""
+    if not extensions:
+        return None
+    task_id = extensions.get('task_id', extensions.get('taskId'))
+    if task_id is None or task_id == '':
+        return None
+    return task_id
+
+
 async def mark_test_spin_click(bearer_token: str, error_code: str, task_id=None) -> bool:
-    """Call the official VirusGift mutations used by the website frontend."""
+    """Call the official VirusGift mutations used by the website frontend.
+
+    Returns True when mark is not required (URL click without task_id) — website
+    skips markTestSpinTaskClick in that case and only opens the Telegram link.
+    """
     headers = graphql_auth_headers(bearer_token)
     error_code = infer_test_spin_click_code(error_code=error_code)
 
     if error_code == 'TEST_SPIN_URL_CLICK_REQUIRED':
         if task_id is None:
-            logger.error("TEST_SPIN_URL_CLICK_REQUIRED without task_id")
-            return False
+            # Mirror website: no task_id → skip mutation, open link only
+            logger.info("TEST_SPIN_URL_CLICK_REQUIRED without task_id — skip mark, open link")
+            return True
         normalized_task_id = int(task_id) if str(task_id).isdigit() else task_id
         payload = {
             'operationName': 'markTestSpinTaskClick',
@@ -907,12 +922,13 @@ async def open_telegram_deep_link(account_data, click_link: str) -> bool:
         bot_peer = await account_data.client.resolve_peer(bot_username)
         account_data.interacted_bots.add(bot_username)
 
-        # Mini-app: https://t.me/{bot}/{short_name}?startapp=...
+        # Mini-app only for /bot/app or ?startapp= — never for plain ?start=
+        # (guessing short names can "succeed" and skip the partner /start track)
         short_names_to_try = []
+        is_startapp = bool(re.search(r'[?&]startapp=', click_link, re.IGNORECASE))
         if short_name:
             short_names_to_try.append(short_name)
-        elif start_param:
-            # Some partners omit short_name in weird links — try common ones
+        elif is_startapp and start_param:
             short_names_to_try.extend(["app", "start", "game", "webapp"])
 
         for sn in short_names_to_try:
@@ -960,8 +976,8 @@ async def handle_test_spin_click_requirement(
 
     marked = await mark_test_spin_click(bearer_token, resolved_code, task_id=task_id)
     if not marked:
-        # Partner bots without task_id still need the Telegram open for portal/tonnel/tonplay
-        if resolved_code == 'TEST_SPIN_URL_CLICK_REQUIRED':
+        # URL click with task_id must mark successfully (same as website)
+        if resolved_code == 'TEST_SPIN_URL_CLICK_REQUIRED' and task_id is not None:
             return False
 
     opened = await open_telegram_deep_link(account_data, click_link)
@@ -969,6 +985,9 @@ async def handle_test_spin_click_requirement(
         logger.warning("Mark/open: Telegram deep link open failed; continuing if mark succeeded")
 
     await asyncio.sleep(2)
+    # Website always opens the link after an optional mark; open alone is enough without task_id
+    if resolved_code == 'TEST_SPIN_URL_CLICK_REQUIRED' and task_id is None:
+        return bool(opened)
     return bool(marked or opened)
 
 
@@ -1188,12 +1207,15 @@ async def resolve_action_errors(account_name: str, account_data: AccountData, re
 
             if error_code in click_codes:
                 click_link = extensions.get('link')
-                task_id = extensions.get('task_id')
+                task_id = extract_task_id(extensions)
                 if not click_link:
-                    logger.error(f"[{account_name}] {error_code} without link")
+                    logger.error(f"[{account_name}] {error_code} without link; extensions={extensions}")
                     return result, error_code
                 click_link = click_link.strip().strip('`').strip()
-                logger.info(f"[{account_name}] Click required ({error_code}): {click_link}")
+                logger.info(
+                    f"[{account_name}] Click required ({error_code}): {click_link}"
+                    + (f" task_id={task_id}" if task_id is not None else f" extensions={extensions}")
+                )
                 click_success = await handle_test_spin_click_requirement(
                     account_data.bearer_token,
                     error_code,
@@ -1959,18 +1981,22 @@ async def process_account_roulette(account_name: str, account_data: AccountData)
 
                 if error_code in click_codes:
                     click_link = extensions.get('link')
-                    task_id = extensions.get('task_id')
+                    task_id = extract_task_id(extensions)
                     if not click_link:
-                        logger.error(f"[{account_name}] {error_code} without link")
+                        logger.error(f"[{account_name}] {error_code} without link; extensions={extensions}")
                         return False
                     click_link = click_link.strip().strip('`').strip()
-                    logger.info(f"[{account_name}] Click required ({error_code}): {click_link}")
+                    logger.info(
+                        f"[{account_name}] Click required ({error_code}): {click_link}"
+                        + (f" task_id={task_id}" if task_id is not None else f" extensions={extensions}")
+                    )
                     click_success = await handle_test_spin_click_requirement(
                         account_data.bearer_token,
                         error_code,
                         click_link,
                         account_data=account_data,
                         task_id=task_id,
+                        error_message=error_message,
                     )
                     if not click_success:
                         logger.error(f"[{account_name}] Test spin click mark failed")
